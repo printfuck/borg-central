@@ -4,7 +4,7 @@ Lets you setup a local repo and pulls data from a configured machine.
 
 ## Mysql & MariaDB
 
-Dumps databases inside docker containers from `mariadb` or `mysql` repos on dockerhub
+Dumps databases inside docker containers of `mariadb` or `mysql` images from dockerhub
 
 ### Usage
 
@@ -66,6 +66,6 @@ If you don't want to backup any paths, leave it blank
 
 The Borg Passphrase should be set and has a default value.
 
-## platforms
+## Platforms
 
 automatically detected platforms are x86_64 & armv6/7/8
