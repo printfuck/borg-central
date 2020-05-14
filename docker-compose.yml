@@ -1,0 +1,30 @@
+version: "3"
+
+services:
+
+  borg:
+    container_name: borg
+    build: .
+    ports:
+      # Must match [host] and [port] env variables
+      # except you know what you're doing ...
+      - 192.168.5.23:22222:22
+    volumes:
+      # expects private key file for [remote_user] on [remote_host]
+      - ./private.key:/key/private.key
+      # The repo; as long as the password is the same, 
+      # this can overlap with other containers
+      - ./repo:/repo
+      # borg executables will be downloaded on every recreation of the container
+      # this denies it ...
+      - ./borg:/borg
+    environment:
+      - mysql_db_containers=freshrss_mariadb_1
+      - backup_paths=/home/borg/test
+      - INTERVAL=86400
+      - host=192.168.5.23
+      - port=22222
+      - BORG_PASSPHRASE=verylongandsecure
+      - remote_user=borg
+      - remote_host=192.168.5.27
+      - remote_port=222
