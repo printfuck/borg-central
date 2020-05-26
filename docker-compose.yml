@@ -19,12 +19,14 @@ services:
       # this denies it ...
       - ./borg:/borg
     environment:
-      - mysql_db_containers=freshrss_mariadb_1
-      - backup_paths=/home/borg/test
+      - mysql_db_containers="wordpress_1 wordpress_2"
+      - postgres_db_containers=
+      - mongo_db_containers=example_mongo_db_1
+      - backup_paths="/etc /data"
       - INTERVAL=86400
-      - host=192.168.5.23
+      - host=accessable.docker.host
       - port=22222
       - BORG_PASSPHRASE=verylongandsecure
       - remote_user=borg
-      - remote_host=192.168.5.27
-      - remote_port=222
+      - remote_host=location.to.backup
+      - remote_port=22
