@@ -3,7 +3,6 @@
 
 tmp_path=${tmp_path:-"/tmp"}
 BORG_PASSPHRASE=${BORG_PASSPHRASE:-'verylongandsecure'}
-#mysql_db_containers=${mysql_db_containers:-"foo bar baz"}
 backup_paths=${backup_paths:-"foo bar baz"}
 borg_remote=${borg_remote:-"BORG_RELOCATED_REPO_ACCESS_IS_OK=yes BORG_RSH=\"ssh -i /tmp/key -o StrictHostKeyChecking=no\" BORG_PASSPHRASE=$BORG_PASSPHRASE /tmp/borg"}
 INTERVAL=${INTERVAL:-86400}
@@ -15,11 +14,53 @@ remote_port=${remote_port:-22}
 
 sshremote="ssh -p $remote_port -o StrictHostKeyChecking=no -i /key/private.key $remote_user@$remote_host"
 
+rip_mongo_dbs()
+{
+	username=$1
+
+	echo Now ripping Mongo DBs
+	name=
+
+	for name in $mongo_db_containers; do 
+		echo ripping DB: $name
+		$sshremote "docker exec $name /bin/sh -c '/usr/bin/mongodump --username \$MONGO_INITDB_ROOT_USERNAME --password \$MONGO_INITDB_ROOT_PASSWORD --db \$MONGO_INITDB_DATABASE --out -' > $tmp_path/$name.bson"
+		$sshremote $borg_remote create \
+			--verbose --filter AME \
+			--list --stats --show-rc \
+			--compression zstd,5 --exclude-caches \
+			ssh://$username@$host:$port/repo::$name-{hostname}-{now} \
+			$tmp_path/$name.bson 2>&1
+		$sshremote rm $tmp_path/$name.bson
+	done
+}
+
+
+rip_postgres_dbs()
+{
+	username=$1
+
+	echo Now ripping Postgres DBs
+	name=
+
+	for name in $postgres_db_containers; do 
+		echo ripping DB: $name
+		$sshremote "docker exec $name /bin/sh -c 'pg_dump -U \$POSTGRES_USER -h 127.0.0.1 -d \$POSTGRES_DB' > $tmp_path/$name.sql"
+		$sshremote $borg_remote create \
+			--verbose --filter AME \
+			--list --stats --show-rc \
+			--compression zstd,5 --exclude-caches \
+			ssh://$username@$host:$port/repo::$name-{hostname}-{now} \
+			$tmp_path/$name.sql 2>&1
+		$sshremote rm $tmp_path/$name.sql
+	done
+}
+
 rip_dbs()
 {
 	username=$1
 
-	echo Now ripping DBs
+	echo Now ripping Mysql DBs
+	name=
 
 	for name in $mysql_db_containers; do 
 		echo ripping DB: $name
@@ -47,7 +88,7 @@ rip_repos()
 
 	echo Now ripping paths
 	
-	if [ ! -z $bacup_paths ]; then
+	if [ ! -z $backup_paths ]; then
 
 		$sshremote $borg_remote create \
 			--verbose --filter AME \
@@ -107,16 +148,16 @@ put_borg()
 	
 	echo shipping my executables
 
-	if ! file_exist_remote /tmp/borg; then
+	if $sshremote '[ ! -f /tmp/borg ]' ; then
 	
 		binary=borg_x86_64
 		arch=`$sshremote uname -m`
 	
-		if [[ "$arch" =~ "armv6" ]] || [[ "$arch" =~ "armv7" ]]; then
+		if [ ! -z `echo $arch | grep -o 'armv6'` ] || [ ! -z `echo $arch | grep -o 'armv7'` ] ; then
 			binary=borg_armv67
 		fi
 
-		if [[ "$arch" =~ "armv8" ]] || [[ "$arch" =~ "arm64" ]]; then
+		if [ ! -z `echo $arch | grep -o 'armv8'` ] || [ ! -z `echo $arch | grep -o 'arm64'` ] ; then
 			binary=borg_arm64
 		fi
 
@@ -127,10 +168,12 @@ put_borg()
 
 init
 while true; do
-	user_name=`head -3 /dev/urandom | tr -cd '[:alnum:]' | cut -c -10`
+	user_name=`head -3 /dev/urandom | tr -cd '[:alpha:]' | cut -c -10`
 	create_user $user_name		
 	put_borg $user_name
 	rip_repos $user_name
+	rip_mongo_dbs $user_name
+	rip_postgres_dbs $user_name
 	rip_dbs $user_name
 	del_user $user_name
 	sleep $INTERVAL
